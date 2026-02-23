@@ -6,661 +6,221 @@
 <title>Algerie-Market | منصة الإعلانات الجزائرية</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+  import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+  import { getFirestore, collection, addDoc, getDocs, query, orderBy, serverTimestamp }
+    from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+  const firebaseConfig = {
+    apiKey:            "AIzaSyCyejRGX1nfr8vACwQeLUsa1kIshWwQZj4",
+    authDomain:        "market-algerie.firebaseapp.com",
+    projectId:         "market-algerie",
+    storageBucket:     "market-algerie.firebasestorage.app",
+    messagingSenderId: "915670005616",
+    appId:             "1:915670005616:web:4285c55bc20c6294cf01b5",
+    measurementId:     "G-L25TLETKF3"
+  };
+
+  const app      = initializeApp(firebaseConfig);
+  const auth     = getAuth(app);
+  const db       = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  window.firebaseLoginWithGoogle = async () => {
+    try {
+      const result = await signInWithPopup(auth, provider);
+      return result.user;
+    } catch (err) {
+      alert("فشل تسجيل الدخول: " + err.message);
+      return null;
+    }
+  };
+
+  window.firebaseLogout = async () => { await signOut(auth); };
+
+  window.firebaseSaveAd = async (adData) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error("يجب تسجيل الدخول أولاً");
+    const docRef = await addDoc(collection(db, "ads"), {
+      ...adData,
+      userId: user.uid, userName: user.displayName,
+      userEmail: user.email, userPhoto: user.photoURL,
+      createdAt: serverTimestamp()
+    });
+    return docRef.id;
+  };
+
+  window.firebaseGetAds = async () => {
+    const q = query(collection(db, "ads"), orderBy("createdAt", "desc"));
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+  };
+
+  onAuthStateChanged(auth, (user) => {
+    window.currentUser = user || null;
+    const navActions = document.getElementById('navActions');
+    if (!navActions) return;
+    if (user) {
+      navActions.innerHTML = `
+        <div style="display:flex;align-items:center;gap:12px;">
+          <img src="${user.photoURL||''}" onerror="this.style.display='none'"
+               style="width:36px;height:36px;border-radius:50%;border:2px solid var(--primary);">
+          <span style="font-size:.88rem;color:var(--text-muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${user.displayName||user.email}</span>
+          <button class="btn-add" onclick="openModal()"><span class="plus">+</span> أضف إعلانك</button>
+          <button onclick="logoutUser()" style="background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:8px 16px;border-radius:30px;cursor:pointer;font-family:'Tajawal',sans-serif;font-size:.85rem;"
+            onmouseover="this.style.borderColor='var(--primary)';this.style.color='var(--primary)'"
+            onmouseout="this.style.borderColor='var(--border)';this.style.color='var(--text-muted)'">خروج</button>
+        </div>`;
+    } else {
+      navActions.innerHTML = `<button class="btn-add" onclick="openModal()"><span class="plus">+</span> أضف إعلانك</button>`;
+    }
+  });
+</script>
+
 <style>
   :root {
-    --primary: #FF6B35;
-    --primary-dark: #e55a26;
-    --secondary: #1A1A2E;
-    --accent: #FFD700;
-    --accent2: #16213E;
-    --surface: #0F3460;
-    --bg: #070B1A;
-    --card: rgba(22, 33, 62, 0.8);
-    --text: #F0F0F0;
-    --text-muted: #8899BB;
-    --border: rgba(255,107,53,0.2);
-    --success: #00C896;
-    --gradient: linear-gradient(135deg, #FF6B35, #FFD700);
-  }
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  body {
-    font-family: 'Tajawal', sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    min-height: 100vh;
-    overflow-x: hidden;
-  }
-
-  body::before {
-    content: '';
-    position: fixed;
-    inset: 0;
-    background: 
-      radial-gradient(ellipse 80% 50% at 20% 20%, rgba(255,107,53,0.12) 0%, transparent 60%),
-      radial-gradient(ellipse 60% 40% at 80% 80%, rgba(255,215,0,0.08) 0%, transparent 60%),
-      radial-gradient(ellipse 40% 60% at 50% 50%, rgba(15,52,96,0.4) 0%, transparent 70%);
-    pointer-events: none;
-    z-index: 0;
-  }
-
-  nav {
-    position: sticky;
-    top: 0;
-    z-index: 1000;
-    background: rgba(7, 11, 26, 0.85);
-    backdrop-filter: blur(20px);
-    border-bottom: 1px solid var(--border);
-    padding: 0 2rem;
-    height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    text-decoration: none;
-  }
-
-  .logo-icon {
-    width: 44px;
-    height: 44px;
-    background: var(--gradient);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 22px;
-    box-shadow: 0 4px 20px rgba(255,107,53,0.4);
-    animation: pulse-glow 3s ease-in-out infinite;
-    flex-shrink: 0;
-  }
-
-  .logo-text {
-    display: flex;
-    flex-direction: column;
-    line-height: 1.15;
-  }
-
-  .logo-text .name {
-    font-size: 1.3rem;
-    font-weight: 900;
-    background: var(--gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-family: 'Cairo', sans-serif;
-    direction: ltr;
-    white-space: nowrap;
-  }
-
-  .logo-text .tagline {
-    font-size: 0.6rem;
-    color: var(--text-muted);
-    font-weight: 300;
-    white-space: nowrap;
-  }
-
-  @keyframes pulse-glow {
-    0%, 100% { box-shadow: 0 4px 20px rgba(255,107,53,0.4); }
-    50% { box-shadow: 0 4px 35px rgba(255,107,53,0.7), 0 0 60px rgba(255,215,0,0.2); }
-  }
-
-  .nav-actions { display: flex; align-items: center; gap: 12px; }
-
-  .btn-add {
-    background: var(--gradient);
-    color: #fff;
-    border: none;
-    padding: 10px 24px;
-    border-radius: 50px;
-    font-family: 'Tajawal', sans-serif;
-    font-size: 0.95rem;
-    font-weight: 700;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(255,107,53,0.3);
-  }
-
-  .btn-add:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(255,107,53,0.5); }
-
-  .btn-add .plus {
-    width: 22px; height: 22px;
-    background: rgba(255,255,255,0.25);
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 1.1rem; font-weight: 300;
-  }
-
-  .hero {
-    position: relative; z-index: 1;
-    text-align: center;
-    padding: 80px 2rem 60px;
-  }
-
-  .hero-badge {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(255,107,53,0.1);
-    border: 1px solid rgba(255,107,53,0.3);
-    border-radius: 50px; padding: 6px 18px;
-    font-size: 0.82rem; color: var(--primary);
-    margin-bottom: 24px;
-    animation: fadeInDown 0.6s ease;
-  }
-
-  .hero h1 {
-    font-family: 'Cairo', sans-serif;
-    font-size: clamp(2.2rem, 5vw, 3.8rem);
-    font-weight: 900; line-height: 1.2;
-    margin-bottom: 16px;
-    animation: fadeInDown 0.7s ease;
-  }
-
-  .hero h1 span {
-    background: var(--gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
-
-  .hero p {
-    color: var(--text-muted); font-size: 1.05rem;
-    max-width: 500px; margin: 0 auto 40px;
-    animation: fadeInDown 0.8s ease;
-  }
-
-  .search-container {
-    max-width: 700px; margin: 0 auto 60px;
-    position: relative; animation: fadeInUp 0.9s ease; z-index: 1;
-  }
-
-  .search-bar {
-    display: flex;
-    background: rgba(22, 33, 62, 0.9);
-    border: 1px solid var(--border);
-    border-radius: 60px; overflow: hidden;
-    box-shadow: 0 8px 40px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
-    transition: all 0.3s ease;
-  }
-
-  .search-bar:focus-within {
-    border-color: var(--primary);
-    box-shadow: 0 8px 40px rgba(255,107,53,0.2), 0 0 0 4px rgba(255,107,53,0.08);
-  }
-
-  .search-input {
-    flex: 1; background: transparent; border: none;
-    padding: 18px 24px;
-    font-family: 'Tajawal', sans-serif; font-size: 1rem;
-    color: var(--text); outline: none; text-align: right;
-  }
-
-  .search-input::placeholder { color: var(--text-muted); }
-
-  .search-btn {
-    background: var(--gradient); border: none;
-    padding: 14px 28px; margin: 6px; border-radius: 50px;
-    cursor: pointer; color: white; font-size: 1.1rem;
-    transition: all 0.2s ease;
-  }
-
-  .search-btn:hover { opacity: 0.9; transform: scale(0.97); }
-
-  .stats {
-    display: flex; justify-content: center;
-    gap: 40px; margin-bottom: 70px;
-    flex-wrap: wrap; z-index: 1; position: relative;
-    animation: fadeInUp 1s ease;
-  }
-
-  .stat-item { text-align: center; }
-
-  .stat-item .num {
-    font-size: 2rem; font-weight: 900;
-    background: var(--gradient);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-family: 'Cairo', sans-serif;
-  }
-
-  .stat-item .label { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
-
-  .section-title {
-    text-align: center; margin-bottom: 40px;
-    position: relative; z-index: 1;
-  }
-
-  .section-title h2 { font-family: 'Cairo', sans-serif; font-size: 1.8rem; font-weight: 800; }
-  .section-title p { color: var(--text-muted); font-size: 0.9rem; margin-top: 6px; }
-
-  .section-title .line {
-    width: 50px; height: 3px;
-    background: var(--gradient);
-    margin: 12px auto 0; border-radius: 3px;
-  }
-
-  .categories-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 14px;
-    max-width: 1100px;
-    margin: 0 auto 0;
-    padding: 0 2rem;
-    position: relative; z-index: 1;
-  }
-
-  .cat-card {
-    background: var(--card);
-    border: 1px solid var(--border);
-    border-radius: 18px;
-    padding: 18px 10px 14px;
-    text-align: center;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    backdrop-filter: blur(10px);
-    position: relative;
-    overflow: visible;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-    min-height: 110px;
-  }
-
-  .cat-card.active-cat {
-    border-color: var(--primary);
-    background: rgba(255,107,53,0.12);
-    box-shadow: 0 0 0 2px rgba(255,107,53,0.3);
-  }
-
-  .cat-card::before {
-    content: '';
-    position: absolute; inset: 0;
-    border-radius: 18px;
-    background: var(--gradient);
-    opacity: 0;
-    transition: opacity 0.3s ease;
-    z-index: 0;
-  }
-
-  .cat-card:hover { transform: translateY(-4px); border-color: var(--primary); box-shadow: 0 12px 40px rgba(255,107,53,0.2); }
-  .cat-card:hover::before { opacity: 0.05; }
-
-  .cat-icon { font-size: 2rem; display: block; position: relative; z-index: 2; line-height: 1; }
-  .cat-name { font-size: 0.85rem; font-weight: 700; position: relative; z-index: 2; }
-  .cat-count { font-size: 0.7rem; color: var(--text-muted); position: relative; z-index: 2; }
-
-  .cat-ads-panel {
-    max-width: 1100px; margin: 0 auto;
-    padding: 0 2rem;
-    position: relative; z-index: 1; overflow: hidden;
-  }
-
-  .cat-ads-inner {
-    background: rgba(15, 26, 53, 0.7);
-    border: 1px solid var(--border);
-    border-radius: 24px; padding: 28px;
-    margin-top: 16px; backdrop-filter: blur(12px);
-    animation: slideDown 0.35s cubic-bezier(0.34, 1.2, 0.64, 1);
-  }
-
-  @keyframes slideDown {
-    from { opacity: 0; transform: translateY(-16px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .cat-panel-header {
-    display: flex; align-items: center;
-    justify-content: space-between;
-    margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
-  }
-
-  .cat-panel-title {
-    font-family: 'Cairo', sans-serif;
-    font-size: 1.15rem; font-weight: 800;
-    display: flex; align-items: center; gap: 10px;
-  }
-
-  .cat-panel-count {
-    font-size: 0.78rem;
-    background: rgba(255,107,53,0.12);
-    border: 1px solid rgba(255,107,53,0.25);
-    color: var(--primary); padding: 3px 12px;
-    border-radius: 20px; font-weight: 600;
-  }
-
-  .btn-panel-close {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid var(--border);
-    color: var(--text-muted);
-    width: 32px; height: 32px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer; font-size: 1rem; transition: all 0.2s;
-  }
-
-  .btn-panel-close:hover { color: var(--primary); border-color: var(--primary); }
-
-  .btn-add-in-cat {
-    background: var(--gradient); color: white; border: none;
-    padding: 9px 20px; border-radius: 30px;
-    font-family: 'Tajawal', sans-serif;
-    font-size: 0.88rem; font-weight: 700; cursor: pointer;
-    transition: all 0.2s; display: flex; align-items: center; gap: 6px;
-    box-shadow: 0 4px 15px rgba(255,107,53,0.3);
-  }
-
-  .btn-add-in-cat:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(255,107,53,0.45); }
-
-  .panel-ads-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 16px;
-  }
-
-  .panel-empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
-  .panel-empty .empty-icon { font-size: 3rem; display: block; margin-bottom: 12px; }
-  .panel-empty p { font-size: 0.9rem; margin-bottom: 16px; }
-
-  .ads-section {
-    max-width: 1200px; margin: 60px auto 80px;
-    padding: 0 2rem; position: relative; z-index: 1;
-  }
-
-  .filter-tabs { display: flex; gap: 10px; margin-bottom: 30px; flex-wrap: wrap; }
-
-  .filter-tab {
-    background: transparent; border: 1px solid var(--border);
-    color: var(--text-muted); padding: 8px 20px; border-radius: 50px;
-    font-family: 'Tajawal', sans-serif; font-size: 0.88rem; cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .filter-tab.active, .filter-tab:hover {
-    background: var(--gradient); border-color: transparent;
-    color: white; font-weight: 700;
-  }
-
-  .ads-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 20px;
-  }
-
-  .ad-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: 20px; overflow: hidden; cursor: pointer;
-    transition: all 0.3s ease; backdrop-filter: blur(10px);
-    animation: fadeInUp 0.5s ease backwards;
-  }
-
-  .ad-card:hover { transform: translateY(-4px); box-shadow: 0 16px 50px rgba(0,0,0,0.4); border-color: rgba(255,107,53,0.4); }
-
-  .ad-image {
-    height: 180px;
-    background: linear-gradient(135deg, var(--surface), var(--accent2));
-    display: flex; align-items: center; justify-content: center;
-    font-size: 3.5rem; position: relative;
-  }
-
-  .ad-badge {
-    position: absolute; top: 12px; right: 12px;
-    background: var(--primary); color: white;
-    font-size: 0.7rem; font-weight: 700;
-    padding: 4px 10px; border-radius: 20px;
-  }
-
-  .ad-badge.sale { background: var(--success); }
-  .ad-body { padding: 18px; }
-
-  .ad-title {
-    font-size: 0.98rem; font-weight: 700; margin-bottom: 6px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-
-  .ad-meta { display: flex; gap: 12px; color: var(--text-muted); font-size: 0.78rem; margin-bottom: 14px; }
-
-  .ad-price {
-    font-size: 1.3rem; font-weight: 900;
-    background: var(--gradient);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; font-family: 'Cairo', sans-serif;
-  }
-
-  .ad-footer {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border);
-  }
-
-  .ad-seller { display: flex; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); }
-
-  .seller-avatar {
-    width: 28px; height: 28px; border-radius: 50%;
-    background: var(--gradient);
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.75rem; color: white; font-weight: 700;
-  }
-
-  .btn-contact {
-    background: transparent; border: 1px solid var(--primary);
-    color: var(--primary); padding: 6px 14px; border-radius: 20px;
-    font-family: 'Tajawal', sans-serif; font-size: 0.8rem;
-    cursor: pointer; transition: all 0.2s ease;
-  }
-
-  .btn-contact:hover { background: var(--primary); color: white; }
-
-  .modal-overlay {
-    position: fixed; inset: 0;
-    background: rgba(0,0,0,0.75);
-    backdrop-filter: blur(10px);
-    z-index: 9999;
-    display: flex; align-items: center; justify-content: center;
-    padding: 1rem;
-    opacity: 0; visibility: hidden;
-    transition: all 0.3s ease;
-  }
-
-  .modal-overlay.open { opacity: 1; visibility: visible; }
-
-  .modal {
-    background: linear-gradient(145deg, #0F1A35, #162130);
-    border: 1px solid var(--border);
-    border-radius: 28px; width: 100%; max-width: 520px;
-    max-height: 90vh; overflow-y: auto;
-    transform: scale(0.92) translateY(20px);
-    transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
-    box-shadow: 0 30px 100px rgba(0,0,0,0.6);
-  }
-
-  .modal-overlay.open .modal { transform: scale(1) translateY(0); }
-
-  .modal-header {
-    padding: 28px 28px 20px; border-bottom: 1px solid var(--border);
-    display: flex; align-items: center; justify-content: space-between;
-  }
-
-  .modal-title { font-size: 1.3rem; font-weight: 800; font-family: 'Cairo', sans-serif; }
-
-  .modal-close {
-    width: 36px; height: 36px; border-radius: 50%;
-    background: rgba(255,255,255,0.07); border: none;
-    color: var(--text-muted); font-size: 1.2rem; cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-    transition: all 0.2s;
-  }
-
-  .modal-close:hover { background: rgba(255,107,53,0.2); color: var(--primary); }
-  .modal-body { padding: 28px; }
-
-  .auth-step { text-align: center; }
-  .auth-icon { font-size: 3rem; margin-bottom: 16px; }
-  .auth-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; font-family: 'Cairo', sans-serif; }
-  .auth-sub { color: var(--text-muted); font-size: 0.88rem; margin-bottom: 28px; }
-
-  .btn-google {
-    display: flex; align-items: center; justify-content: center;
-    gap: 12px; width: 100%; padding: 14px 20px;
-    background: white; color: #333; border: none; border-radius: 14px;
-    font-family: 'Tajawal', sans-serif; font-size: 1rem; font-weight: 700;
-    cursor: pointer; transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  }
-
-  .btn-google:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(0,0,0,0.4); }
-
-  .google-logo {
-    width: 22px; height: 22px;
-    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234285F4' d='M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z'/%3E%3Cpath fill='%2334A853' d='M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z'/%3E%3Cpath fill='%23FBBC05' d='M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z'/%3E%3Cpath fill='%23EA4335' d='M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z'/%3E%3C/svg%3E") center/contain no-repeat;
-    flex-shrink: 0;
-  }
-
-  .divider {
-    display: flex; align-items: center; gap: 12px;
-    margin: 20px 0; color: var(--text-muted); font-size: 0.82rem;
-  }
-
-  .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-
-  .steps-indicator {
-    display: flex; align-items: center; gap: 8px;
-    justify-content: center; margin-bottom: 28px;
-  }
-
-  .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
-  .step-dot.active { background: var(--primary); width: 24px; border-radius: 4px; }
-  .step-dot.done { background: var(--success); }
-
-  .cats-select { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 20px; }
-
-  .cat-select-item {
-    background: rgba(22, 33, 62, 0.6);
-    border: 2px solid var(--border); border-radius: 14px;
-    padding: 14px 8px; text-align: center; cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .cat-select-item:hover, .cat-select-item.selected { border-color: var(--primary); background: rgba(255,107,53,0.08); }
-  .cat-select-item .icon { font-size: 1.6rem; display: block; margin-bottom: 4px; }
-  .cat-select-item .name { font-size: 0.75rem; font-weight: 600; }
-
-  .form-group { margin-bottom: 18px; }
-
-  .form-label { display: block; font-size: 0.88rem; font-weight: 600; margin-bottom: 8px; }
-  .form-label span { color: var(--primary); }
-
-  .form-control {
-    width: 100%;
-    background: rgba(22, 33, 62, 0.8);
-    border: 1px solid var(--border); border-radius: 12px;
-    padding: 12px 16px;
-    font-family: 'Tajawal', sans-serif; font-size: 0.95rem;
-    color: var(--text); outline: none; transition: all 0.2s ease;
-    text-align: right;
-  }
-
-  .form-control:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(255,107,53,0.12); }
-  .form-control::placeholder { color: var(--text-muted); }
-  textarea.form-control { resize: vertical; min-height: 90px; }
-  select.form-control { cursor: pointer; direction: rtl; }
-
-  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-
-  .image-upload {
-    border: 2px dashed var(--border); border-radius: 14px;
-    padding: 30px; text-align: center; cursor: pointer;
-    transition: all 0.2s ease; color: var(--text-muted); font-size: 0.88rem;
-  }
-
-  .image-upload:hover { border-color: var(--primary); background: rgba(255,107,53,0.04); color: var(--text); }
-  .image-upload .upload-icon { font-size: 2.2rem; display: block; margin-bottom: 8px; }
-
-  .btn-submit {
-    width: 100%; background: var(--gradient); color: white; border: none;
-    border-radius: 14px; padding: 16px;
-    font-family: 'Tajawal', sans-serif; font-size: 1.05rem; font-weight: 700;
-    cursor: pointer; transition: all 0.3s ease;
-    box-shadow: 0 6px 25px rgba(255,107,53,0.35); margin-top: 8px;
-  }
-
-  .btn-submit:hover { transform: translateY(-2px); box-shadow: 0 10px 35px rgba(255,107,53,0.5); }
-
-  .btn-back {
-    width: 100%; background: transparent; border: 1px solid var(--border);
-    color: var(--text-muted); border-radius: 14px; padding: 13px;
-    font-family: 'Tajawal', sans-serif; font-size: 0.95rem;
-    cursor: pointer; margin-top: 10px; transition: all 0.2s ease;
-  }
-
-  .btn-back:hover { border-color: var(--primary); color: var(--primary); }
-
-  .success-state { text-align: center; padding: 20px 0; }
-
-  .success-icon {
-    width: 80px; height: 80px;
-    background: rgba(0, 200, 150, 0.15);
-    border: 2px solid var(--success); border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 2.2rem; margin: 0 auto 20px;
-    animation: success-pop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
-  @keyframes success-pop {
-    0% { transform: scale(0); opacity: 0; }
-    100% { transform: scale(1); opacity: 1; }
-  }
-
-  footer {
-    text-align: center; padding: 40px 2rem;
-    border-top: 1px solid var(--border);
-    color: var(--text-muted); font-size: 0.85rem;
-    position: relative; z-index: 1;
-  }
-
-  footer .footer-logo {
-    font-family: 'Cairo', sans-serif; font-size: 1.4rem; font-weight: 900;
-    background: var(--gradient);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-    background-clip: text; margin-bottom: 12px;
-  }
-
-  @keyframes fadeInDown {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  @keyframes fadeInUp {
-    from { opacity: 0; transform: translateY(30px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .ad-card:nth-child(1) { animation-delay: 0.1s; }
-  .ad-card:nth-child(2) { animation-delay: 0.15s; }
-  .ad-card:nth-child(3) { animation-delay: 0.2s; }
-  .ad-card:nth-child(4) { animation-delay: 0.25s; }
-  .ad-card:nth-child(5) { animation-delay: 0.3s; }
-  .ad-card:nth-child(6) { animation-delay: 0.35s; }
-
-  ::-webkit-scrollbar { width: 6px; }
-  ::-webkit-scrollbar-track { background: var(--bg); }
-  ::-webkit-scrollbar-thumb { background: var(--surface); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
-
-  @media (max-width: 600px) {
-    .form-row { grid-template-columns: 1fr; }
-    .cats-select { grid-template-columns: repeat(3, 1fr); }
-    nav { padding: 0 1rem; }
-    .hero { padding: 50px 1rem 40px; }
-    .categories-grid { grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 0 1rem; }
-  }
+    --primary:#FF6B35;--primary-dark:#e55a26;--secondary:#1A1A2E;--accent:#FFD700;
+    --accent2:#16213E;--surface:#0F3460;--bg:#070B1A;--card:rgba(22,33,62,0.8);
+    --text:#F0F0F0;--text-muted:#8899BB;--border:rgba(255,107,53,0.2);
+    --success:#00C896;--gradient:linear-gradient(135deg,#FF6B35,#FFD700);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Tajawal',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden;}
+  body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellipse 80% 50% at 20% 20%,rgba(255,107,53,0.12) 0%,transparent 60%),radial-gradient(ellipse 60% 40% at 80% 80%,rgba(255,215,0,0.08) 0%,transparent 60%);pointer-events:none;z-index:0;}
+  nav{position:sticky;top:0;z-index:1000;background:rgba(7,11,26,0.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:72px;display:flex;align-items:center;justify-content:space-between;}
+  .logo{display:flex;align-items:center;gap:10px;text-decoration:none;}
+  .logo-icon{width:44px;height:44px;background:var(--gradient);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(255,107,53,0.4);animation:pulse-glow 3s ease-in-out infinite;flex-shrink:0;}
+  .logo-text{display:flex;flex-direction:column;line-height:1.15;}
+  .logo-text .name{font-size:1.3rem;font-weight:900;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Cairo',sans-serif;direction:ltr;white-space:nowrap;}
+  .logo-text .tagline{font-size:.6rem;color:var(--text-muted);font-weight:300;white-space:nowrap;}
+  @keyframes pulse-glow{0%,100%{box-shadow:0 4px 20px rgba(255,107,53,0.4);}50%{box-shadow:0 4px 35px rgba(255,107,53,0.7),0 0 60px rgba(255,215,0,0.2);}}
+  .nav-actions{display:flex;align-items:center;gap:12px;}
+  .btn-add{background:var(--gradient);color:#fff;border:none;padding:10px 24px;border-radius:50px;font-family:'Tajawal',sans-serif;font-size:.95rem;font-weight:700;cursor:pointer;display:flex;align-items:center;gap:8px;transition:all .3s ease;box-shadow:0 4px 20px rgba(255,107,53,0.3);}
+  .btn-add:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(255,107,53,0.5);}
+  .btn-add .plus{width:22px;height:22px;background:rgba(255,255,255,0.25);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.1rem;font-weight:300;}
+  .hero{position:relative;z-index:1;text-align:center;padding:80px 2rem 60px;}
+  .hero-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(255,107,53,0.1);border:1px solid rgba(255,107,53,0.3);border-radius:50px;padding:6px 18px;font-size:.82rem;color:var(--primary);margin-bottom:24px;animation:fadeInDown .6s ease;}
+  .hero h1{font-family:'Cairo',sans-serif;font-size:clamp(2.2rem,5vw,3.8rem);font-weight:900;line-height:1.2;margin-bottom:16px;animation:fadeInDown .7s ease;}
+  .hero h1 span{background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;}
+  .hero p{color:var(--text-muted);font-size:1.05rem;max-width:500px;margin:0 auto 40px;animation:fadeInDown .8s ease;}
+  .search-container{max-width:700px;margin:0 auto 60px;position:relative;animation:fadeInUp .9s ease;z-index:1;}
+  .search-bar{display:flex;background:rgba(22,33,62,0.9);border:1px solid var(--border);border-radius:60px;overflow:hidden;box-shadow:0 8px 40px rgba(0,0,0,0.4);transition:all .3s ease;}
+  .search-bar:focus-within{border-color:var(--primary);box-shadow:0 8px 40px rgba(255,107,53,0.2),0 0 0 4px rgba(255,107,53,0.08);}
+  .search-input{flex:1;background:transparent;border:none;padding:18px 24px;font-family:'Tajawal',sans-serif;font-size:1rem;color:var(--text);outline:none;text-align:right;}
+  .search-input::placeholder{color:var(--text-muted);}
+  .search-btn{background:var(--gradient);border:none;padding:14px 28px;margin:6px;border-radius:50px;cursor:pointer;color:white;font-size:1.1rem;transition:all .2s ease;}
+  .stats{display:flex;justify-content:center;gap:40px;margin-bottom:70px;flex-wrap:wrap;z-index:1;position:relative;animation:fadeInUp 1s ease;}
+  .stat-item{text-align:center;}
+  .stat-item .num{font-size:2rem;font-weight:900;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Cairo',sans-serif;}
+  .stat-item .label{font-size:.8rem;color:var(--text-muted);margin-top:2px;}
+  .section-title{text-align:center;margin-bottom:40px;position:relative;z-index:1;}
+  .section-title h2{font-family:'Cairo',sans-serif;font-size:1.8rem;font-weight:800;}
+  .section-title p{color:var(--text-muted);font-size:.9rem;margin-top:6px;}
+  .section-title .line{width:50px;height:3px;background:var(--gradient);margin:12px auto 0;border-radius:3px;}
+  .categories-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;max-width:1100px;margin:0 auto;padding:0 2rem;position:relative;z-index:1;}
+  .cat-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px 10px 14px;text-align:center;cursor:pointer;transition:all .3s ease;backdrop-filter:blur(10px);position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:110px;}
+  .cat-card.active-cat{border-color:var(--primary);background:rgba(255,107,53,0.12);box-shadow:0 0 0 2px rgba(255,107,53,0.3);}
+  .cat-card::before{content:'';position:absolute;inset:0;border-radius:18px;background:var(--gradient);opacity:0;transition:opacity .3s ease;z-index:0;}
+  .cat-card:hover{transform:translateY(-4px);border-color:var(--primary);box-shadow:0 12px 40px rgba(255,107,53,0.2);}
+  .cat-card:hover::before{opacity:.05;}
+  .cat-icon{font-size:2rem;display:block;position:relative;z-index:2;line-height:1;}
+  .cat-name{font-size:.85rem;font-weight:700;position:relative;z-index:2;}
+  .cat-count{font-size:.7rem;color:var(--text-muted);position:relative;z-index:2;}
+  .cat-ads-panel{max-width:1100px;margin:0 auto;padding:0 2rem;position:relative;z-index:1;}
+  .cat-ads-inner{background:rgba(15,26,53,0.7);border:1px solid var(--border);border-radius:24px;padding:28px;margin-top:16px;backdrop-filter:blur(12px);animation:slideDown .35s cubic-bezier(0.34,1.2,0.64,1);}
+  @keyframes slideDown{from{opacity:0;transform:translateY(-16px);}to{opacity:1;transform:translateY(0);}}
+  .cat-panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px;}
+  .cat-panel-title{font-family:'Cairo',sans-serif;font-size:1.15rem;font-weight:800;display:flex;align-items:center;gap:10px;}
+  .cat-panel-count{font-size:.78rem;background:rgba(255,107,53,0.12);border:1px solid rgba(255,107,53,0.25);color:var(--primary);padding:3px 12px;border-radius:20px;font-weight:600;}
+  .btn-panel-close{background:rgba(255,255,255,0.06);border:1px solid var(--border);color:var(--text-muted);width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:1rem;transition:all .2s;}
+  .btn-panel-close:hover{color:var(--primary);border-color:var(--primary);}
+  .btn-add-in-cat{background:var(--gradient);color:white;border:none;padding:9px 20px;border-radius:30px;font-family:'Tajawal',sans-serif;font-size:.88rem;font-weight:700;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:6px;box-shadow:0 4px 15px rgba(255,107,53,0.3);}
+  .btn-add-in-cat:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(255,107,53,0.45);}
+  .panel-ads-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;}
+  .panel-empty{text-align:center;padding:40px 20px;color:var(--text-muted);}
+  .panel-empty .empty-icon{font-size:3rem;display:block;margin-bottom:12px;}
+  .panel-empty p{font-size:.9rem;margin-bottom:16px;}
+  .ads-section{max-width:1200px;margin:60px auto 80px;padding:0 2rem;position:relative;z-index:1;}
+  .filter-tabs{display:flex;gap:10px;margin-bottom:30px;flex-wrap:wrap;}
+  .filter-tab{background:transparent;border:1px solid var(--border);color:var(--text-muted);padding:8px 20px;border-radius:50px;font-family:'Tajawal',sans-serif;font-size:.88rem;cursor:pointer;transition:all .2s ease;}
+  .filter-tab.active,.filter-tab:hover{background:var(--gradient);border-color:transparent;color:white;font-weight:700;}
+  .ads-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;}
+  .ad-card{background:var(--card);border:1px solid var(--border);border-radius:20px;overflow:hidden;cursor:pointer;transition:all .3s ease;backdrop-filter:blur(10px);animation:fadeInUp .5s ease backwards;}
+  .ad-card:hover{transform:translateY(-4px);box-shadow:0 16px 50px rgba(0,0,0,0.4);border-color:rgba(255,107,53,0.4);}
+  .ad-image{height:180px;background:linear-gradient(135deg,var(--surface),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:3.5rem;position:relative;}
+  .ad-badge{position:absolute;top:12px;right:12px;background:var(--primary);color:white;font-size:.7rem;font-weight:700;padding:4px 10px;border-radius:20px;}
+  .ad-badge.sale{background:var(--success);}
+  .ad-body{padding:18px;}
+  .ad-title{font-size:.98rem;font-weight:700;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .ad-meta{display:flex;gap:12px;color:var(--text-muted);font-size:.78rem;margin-bottom:14px;}
+  .ad-price{font-size:1.3rem;font-weight:900;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;font-family:'Cairo',sans-serif;}
+  .ad-footer{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border);}
+  .ad-seller{display:flex;align-items:center;gap:8px;font-size:.8rem;color:var(--text-muted);}
+  .seller-avatar{width:28px;height:28px;border-radius:50%;background:var(--gradient);display:flex;align-items:center;justify-content:center;font-size:.75rem;color:white;font-weight:700;overflow:hidden;}
+  .seller-avatar img{width:100%;height:100%;object-fit:cover;}
+  .btn-contact{background:transparent;border:1px solid var(--primary);color:var(--primary);padding:6px 14px;border-radius:20px;font-family:'Tajawal',sans-serif;font-size:.8rem;cursor:pointer;transition:all .2s ease;}
+  .btn-contact:hover{background:var(--primary);color:white;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);z-index:9999;display:flex;align-items:center;justify-content:center;padding:1rem;opacity:0;visibility:hidden;transition:all .3s ease;}
+  .modal-overlay.open{opacity:1;visibility:visible;}
+  .modal{background:linear-gradient(145deg,#0F1A35,#162130);border:1px solid var(--border);border-radius:28px;width:100%;max-width:520px;max-height:90vh;overflow-y:auto;transform:scale(.92) translateY(20px);transition:all .35s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 30px 100px rgba(0,0,0,0.6);}
+  .modal-overlay.open .modal{transform:scale(1) translateY(0);}
+  .modal-header{padding:28px 28px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+  .modal-title{font-size:1.3rem;font-weight:800;font-family:'Cairo',sans-serif;}
+  .modal-close{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.07);border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+  .modal-close:hover{background:rgba(255,107,53,0.2);color:var(--primary);}
+  .modal-body{padding:28px;}
+  .auth-step{text-align:center;}
+  .auth-icon{font-size:3rem;margin-bottom:16px;}
+  .auth-title{font-size:1.1rem;font-weight:700;margin-bottom:8px;font-family:'Cairo',sans-serif;}
+  .auth-sub{color:var(--text-muted);font-size:.88rem;margin-bottom:28px;}
+  .btn-google{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;padding:14px 20px;background:white;color:#333;border:none;border-radius:14px;font-family:'Tajawal',sans-serif;font-size:1rem;font-weight:700;cursor:pointer;transition:all .3s ease;box-shadow:0 4px 20px rgba(0,0,0,0.3);}
+  .btn-google:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.4);}
+  .google-logo{width:22px;height:22px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%234285F4' d='M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z'/%3E%3Cpath fill='%2334A853' d='M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z'/%3E%3Cpath fill='%23FBBC05' d='M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z'/%3E%3Cpath fill='%23EA4335' d='M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z'/%3E%3C/svg%3E") center/contain no-repeat;flex-shrink:0;}
+  .divider{display:flex;align-items:center;gap:12px;margin:20px 0;color:var(--text-muted);font-size:.82rem;}
+  .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
+  .steps-indicator{display:flex;align-items:center;gap:8px;justify-content:center;margin-bottom:28px;}
+  .step-dot{width:8px;height:8px;border-radius:50%;background:var(--border);transition:all .3s;}
+  .step-dot.active{background:var(--primary);width:24px;border-radius:4px;}
+  .step-dot.done{background:var(--success);}
+  .cats-select{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px;}
+  .cat-select-item{background:rgba(22,33,62,0.6);border:2px solid var(--border);border-radius:14px;padding:14px 8px;text-align:center;cursor:pointer;transition:all .2s ease;}
+  .cat-select-item:hover,.cat-select-item.selected{border-color:var(--primary);background:rgba(255,107,53,0.08);}
+  .cat-select-item .icon{font-size:1.6rem;display:block;margin-bottom:4px;}
+  .cat-select-item .name{font-size:.75rem;font-weight:600;}
+  .form-group{margin-bottom:18px;}
+  .form-label{display:block;font-size:.88rem;font-weight:600;margin-bottom:8px;}
+  .form-label span{color:var(--primary);}
+  .form-control{width:100%;background:rgba(22,33,62,0.8);border:1px solid var(--border);border-radius:12px;padding:12px 16px;font-family:'Tajawal',sans-serif;font-size:.95rem;color:var(--text);outline:none;transition:all .2s ease;text-align:right;}
+  .form-control:focus{border-color:var(--primary);box-shadow:0 0 0 3px rgba(255,107,53,0.12);}
+  .form-control::placeholder{color:var(--text-muted);}
+  textarea.form-control{resize:vertical;min-height:90px;}
+  select.form-control{cursor:pointer;direction:rtl;}
+  .form-row{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+  .image-upload{border:2px dashed var(--border);border-radius:14px;padding:30px;text-align:center;cursor:pointer;transition:all .2s ease;color:var(--text-muted);font-size:.88rem;}
+  .image-upload:hover{border-color:var(--primary);background:rgba(255,107,53,0.04);color:var(--text);}
+  .image-upload .upload-icon{font-size:2.2rem;display:block;margin-bottom:8px;}
+  .btn-submit{width:100%;background:var(--gradient);color:white;border:none;border-radius:14px;padding:16px;font-family:'Tajawal',sans-serif;font-size:1.05rem;font-weight:700;cursor:pointer;transition:all .3s ease;box-shadow:0 6px 25px rgba(255,107,53,0.35);margin-top:8px;}
+  .btn-submit:hover{transform:translateY(-2px);box-shadow:0 10px 35px rgba(255,107,53,0.5);}
+  .btn-submit:disabled{opacity:.6;cursor:not-allowed;transform:none;}
+  .btn-back{width:100%;background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:14px;padding:13px;font-family:'Tajawal',sans-serif;font-size:.95rem;cursor:pointer;margin-top:10px;transition:all .2s ease;}
+  .btn-back:hover{border-color:var(--primary);color:var(--primary);}
+  .success-state{text-align:center;padding:20px 0;}
+  .success-icon{width:80px;height:80px;background:rgba(0,200,150,0.15);border:2px solid var(--success);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2.2rem;margin:0 auto 20px;animation:success-pop .5s cubic-bezier(0.34,1.56,0.64,1);}
+  @keyframes success-pop{0%{transform:scale(0);opacity:0}100%{transform:scale(1);opacity:1}}
+  .spinner{display:inline-block;width:20px;height:20px;border:2px solid rgba(255,255,255,0.3);border-top-color:white;border-radius:50%;animation:spin .8s linear infinite;vertical-align:middle;margin-left:8px;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .toast{position:fixed;bottom:30px;left:50%;transform:translateX(-50%) translateY(100px);background:var(--success);color:white;padding:14px 28px;border-radius:50px;font-weight:700;font-size:.95rem;z-index:99999;transition:transform .4s cubic-bezier(0.34,1.56,0.64,1);box-shadow:0 8px 30px rgba(0,200,150,0.4);}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  footer{text-align:center;padding:40px 2rem;border-top:1px solid var(--border);color:var(--text-muted);font-size:.85rem;position:relative;z-index:1;}
+  footer .footer-logo{font-family:'Cairo',sans-serif;font-size:1.4rem;font-weight:900;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:12px;}
+  @keyframes fadeInDown{from{opacity:0;transform:translateY(-20px)}to{opacity:1;transform:translateY(0)}}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+  .ad-card:nth-child(1){animation-delay:.1s}.ad-card:nth-child(2){animation-delay:.15s}.ad-card:nth-child(3){animation-delay:.2s}.ad-card:nth-child(4){animation-delay:.25s}.ad-card:nth-child(5){animation-delay:.3s}.ad-card:nth-child(6){animation-delay:.35s}
+  ::-webkit-scrollbar{width:6px}::-webkit-scrollbar-track{background:var(--bg)}::-webkit-scrollbar-thumb{background:var(--surface);border-radius:3px}::-webkit-scrollbar-thumb:hover{background:var(--primary)}
+  @media(max-width:600px){.form-row{grid-template-columns:1fr}.cats-select{grid-template-columns:repeat(3,1fr)}nav{padding:0 1rem}.hero{padding:50px 1rem 40px}.categories-grid{grid-template-columns:repeat(4,1fr);gap:10px;padding:0 1rem}}
 </style>
 </head>
 <body>
@@ -673,10 +233,9 @@
       <span class="tagline">بيع · اشترِ · تبادل في الجزائر 🇩🇿</span>
     </div>
   </a>
-  <div class="nav-actions">
+  <div class="nav-actions" id="navActions">
     <button class="btn-add" onclick="openModal()">
-      <span class="plus">+</span>
-      أضف إعلانك
+      <span class="plus">+</span> أضف إعلانك
     </button>
   </div>
 </nav>
@@ -687,7 +246,7 @@
   <p>آلاف الإعلانات اليومية في كل ولايات الجزائر. بسهولة تامة وبدون أي رسوم</p>
 </section>
 
-<div class="search-container" style="position:relative;z-index:1">
+<div class="search-container">
   <div class="search-bar">
     <input class="search-input" type="text" placeholder="ابحث في الجزائر... سيارات، إلكترونيات، عقارات...">
     <button class="search-btn">🔍</button>
@@ -701,46 +260,51 @@
   <div class="stat-item"><div class="num">58</div><div class="label">ولاية مغطاة</div></div>
 </div>
 
-<div class="section-title" style="position:relative;z-index:1">
+<div class="section-title">
   <h2>تصفح حسب الفئة</h2>
   <p>اختر الفئة التي تبحث عنها</p>
   <div class="line"></div>
 </div>
 
 <div class="categories-grid">
-  <div class="cat-card" onclick="toggleCatPanel('سيارات', '🚗', this)"><span class="cat-icon">🚗</span><div class="cat-name">سيارات</div><div class="cat-count">3,210 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('إلكترونيات', '📱', this)"><span class="cat-icon">📱</span><div class="cat-name">إلكترونيات</div><div class="cat-count">8,540 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('عقارات', '🏠', this)"><span class="cat-icon">🏠</span><div class="cat-name">عقارات</div><div class="cat-count">1,875 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('ملابس', '👗', this)"><span class="cat-icon">👗</span><div class="cat-name">ملابس</div><div class="cat-count">5,320 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('أثاث', '🛋️', this)"><span class="cat-icon">🛋️</span><div class="cat-name">أثاث</div><div class="cat-count">2,100 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('دراجات', '🏍️', this)"><span class="cat-icon">🏍️</span><div class="cat-name">دراجات</div><div class="cat-count">980 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('وظائف', '💼', this)"><span class="cat-icon">💼</span><div class="cat-name">وظائف</div><div class="cat-count">4,200 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('خدمات', '🔧', this)"><span class="cat-icon">🔧</span><div class="cat-name">خدمات</div><div class="cat-count">3,600 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('حيوانات', '🐕', this)"><span class="cat-icon">🐕</span><div class="cat-name">حيوانات</div><div class="cat-count">1,450 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('رياضة', '⚽', this)"><span class="cat-icon">⚽</span><div class="cat-name">رياضة</div><div class="cat-count">2,800 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('ألعاب', '🎮', this)"><span class="cat-icon">🎮</span><div class="cat-name">ألعاب</div><div class="cat-count">3,100 إعلان</div></div>
-  <div class="cat-card" onclick="toggleCatPanel('كتب وتعليم', '📚', this)"><span class="cat-icon">📚</span><div class="cat-name">كتب وتعليم</div><div class="cat-count">1,230 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('سيارات','🚗',this)"><span class="cat-icon">🚗</span><div class="cat-name">سيارات</div><div class="cat-count">3,210 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('إلكترونيات','📱',this)"><span class="cat-icon">📱</span><div class="cat-name">إلكترونيات</div><div class="cat-count">8,540 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('عقارات','🏠',this)"><span class="cat-icon">🏠</span><div class="cat-name">عقارات</div><div class="cat-count">1,875 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('ملابس','👗',this)"><span class="cat-icon">👗</span><div class="cat-name">ملابس</div><div class="cat-count">5,320 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('أثاث','🛋️',this)"><span class="cat-icon">🛋️</span><div class="cat-name">أثاث</div><div class="cat-count">2,100 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('دراجات','🏍️',this)"><span class="cat-icon">🏍️</span><div class="cat-name">دراجات</div><div class="cat-count">980 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('وظائف','💼',this)"><span class="cat-icon">💼</span><div class="cat-name">وظائف</div><div class="cat-count">4,200 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('خدمات','🔧',this)"><span class="cat-icon">🔧</span><div class="cat-name">خدمات</div><div class="cat-count">3,600 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('حيوانات','🐕',this)"><span class="cat-icon">🐕</span><div class="cat-name">حيوانات</div><div class="cat-count">1,450 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('رياضة','⚽',this)"><span class="cat-icon">⚽</span><div class="cat-name">رياضة</div><div class="cat-count">2,800 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('ألعاب','🎮',this)"><span class="cat-icon">🎮</span><div class="cat-name">ألعاب</div><div class="cat-count">3,100 إعلان</div></div>
+  <div class="cat-card" onclick="toggleCatPanel('كتب وتعليم','📚',this)"><span class="cat-icon">📚</span><div class="cat-name">كتب وتعليم</div><div class="cat-count">1,230 إعلان</div></div>
 </div>
 
 <div class="cat-ads-panel" id="catAdsPanel" style="display:none;"></div>
 
 <div class="ads-section">
-  <div class="section-title" style="text-align:right; margin-bottom: 20px;">
+  <div class="section-title" style="text-align:right;margin-bottom:20px;">
     <h2 style="font-size:1.4rem;">أحدث الإعلانات 🔥</h2>
   </div>
   <div class="filter-tabs">
-    <button class="filter-tab active">الكل</button>
-    <button class="filter-tab">للبيع</button>
-    <button class="filter-tab">للإيجار</button>
-    <button class="filter-tab">مطلوب</button>
-    <button class="filter-tab">مجاني</button>
+    <button class="filter-tab active" onclick="filterAds(this,'')">الكل</button>
+    <button class="filter-tab" onclick="filterAds(this,'للبيع')">للبيع</button>
+    <button class="filter-tab" onclick="filterAds(this,'للإيجار')">للإيجار</button>
+    <button class="filter-tab" onclick="filterAds(this,'مطلوب')">مطلوب</button>
+    <button class="filter-tab" onclick="filterAds(this,'مجاني')">مجاني</button>
   </div>
-  <div class="ads-grid" id="adsGrid"></div>
+  <div class="ads-grid" id="adsGrid">
+    <div style="grid-column:1/-1;text-align:center;padding:60px 20px;color:var(--text-muted);">
+      <div class="spinner" style="border-color:rgba(255,107,53,0.3);border-top-color:var(--primary);width:40px;height:40px;border-width:3px;margin:0 auto 16px;"></div>
+      <p>جاري تحميل الإعلانات...</p>
+    </div>
+  </div>
 </div>
 
 <footer>
   <div class="footer-logo">🛒 Algerie-Market</div>
-  <p>© 2024 Algerie-Market — منصة الإعلانات المجانية الجزائرية 🇩🇿 جميع الحقوق محفوظة.</p>
+  <p>© 2024 Algerie-Market — منصة الإعلانات المجانية الجزائرية 🇩🇿</p>
 </footer>
 
 <div class="modal-overlay" id="modalOverlay" onclick="handleOverlayClick(event)">
@@ -753,165 +317,145 @@
   </div>
 </div>
 
+<div class="toast" id="toast"></div>
+
 <script>
-  const mockAds = [
-    { emoji: '📱', title: 'آيفون 14 برو ماكس', price: '120,000 دج', city: 'الجزائر العاصمة', cat: 'إلكترونيات', type: 'بيع', seller: 'أمين' },
-    { emoji: '🚗', title: 'رونو كليو 2020', price: '2,800,000 دج', city: 'وهران', cat: 'سيارات', type: 'بيع', seller: 'كريم' },
-    { emoji: '🛋️', title: 'طقم صالون فاخر', price: '85,000 دج', city: 'قسنطينة', cat: 'أثاث', type: 'بيع', seller: 'سارة' },
-    { emoji: '🏠', title: 'شقة للإيجار - 3 غرف', price: '35,000 دج/شهر', city: 'الجزائر', cat: 'عقارات', type: 'إيجار', seller: 'محمد' },
-    { emoji: '🎮', title: 'بلاي ستيشن 5', price: '75,000 دج', city: 'عنابة', cat: 'ألعاب', type: 'بيع', seller: 'عمر' },
-    { emoji: '👗', title: 'قندورة عصرية جديدة', price: '8,500 دج', city: 'تلمسان', cat: 'ملابس', type: 'بيع', seller: 'ليلى' },
-  ];
+  let allAds=[],catAds={},currentFilter='',selectedCategory='',activeCatEl=null;
 
-  const catAds = {};
+  function showToast(msg,color='#00C896'){
+    const t=document.getElementById('toast');
+    t.textContent=msg;t.style.background=color;
+    t.classList.add('show');setTimeout(()=>t.classList.remove('show'),3500);
+  }
 
-  function renderAds(filter) {
-    const grid = document.getElementById('adsGrid');
-    const filtered = filter ? mockAds.filter(a => a.cat === filter) : mockAds;
-    grid.innerHTML = filtered.map((ad, i) => `
-      <div class="ad-card" style="animation-delay:${i * 0.07}s">
-        <div class="ad-image">
-          ${ad.emoji}
-          <span class="ad-badge ${ad.type === 'بيع' ? '' : 'sale'}">${ad.type}</span>
-        </div>
+  function adCardHTML(ad,delay=0){
+    const emoji=ad.emoji||'📦';
+    const photo=ad.userPhoto
+      ?`<div class="seller-avatar"><img src="${ad.userPhoto}" alt=""></div>`
+      :`<div class="seller-avatar">${(ad.userName||'م')[0]}</div>`;
+    return `
+      <div class="ad-card" style="animation-delay:${delay}s">
+        <div class="ad-image">${emoji}<span class="ad-badge ${ad.type==='للإيجار'?'sale':''}">${ad.type||'بيع'}</span></div>
         <div class="ad-body">
           <div class="ad-title">${ad.title}</div>
-          <div class="ad-meta"><span>📍 ${ad.city}</span><span>🏷️ ${ad.cat}</span></div>
+          <div class="ad-meta"><span>📍 ${ad.city||''}</span><span>🏷️ ${ad.cat||''}</span></div>
           <div class="ad-price">${ad.price}</div>
           <div class="ad-footer">
-            <div class="ad-seller">
-              <div class="seller-avatar">${ad.seller[0]}</div>
-              ${ad.seller}
-            </div>
+            <div class="ad-seller">${photo} ${ad.userName||'مستخدم'}</div>
             <button class="btn-contact">تواصل</button>
           </div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
   }
 
-  renderAds();
-
-  document.querySelectorAll('.filter-tab').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
-      tab.classList.add('active');
-    });
-  });
-
-  let activeCatEl = null;
-
-  function toggleCatPanel(catName, catIcon, el) {
-    const panel = document.getElementById('catAdsPanel');
-    if (activeCatEl === el && panel.style.display !== 'none') {
-      panel.style.display = 'none';
-      el.classList.remove('active-cat');
-      activeCatEl = null;
+  function renderAds(ads){
+    const grid=document.getElementById('adsGrid');
+    if(!ads||ads.length===0){
+      grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:60px;color:var(--text-muted);"><div style="font-size:3rem;margin-bottom:16px;">📭</div><p>لا توجد إعلانات بعد. كن أول من ينشر!</p></div>`;
       return;
     }
-    if (activeCatEl) activeCatEl.classList.remove('active-cat');
-    activeCatEl = el;
-    el.classList.add('active-cat');
-    const ads = (catAds[catName] || []);
-    panel.style.display = 'block';
-    panel.innerHTML = `
+    grid.innerHTML=ads.map((ad,i)=>adCardHTML(ad,i*0.07)).join('');
+  }
+
+  function filterAds(btn,type){
+    document.querySelectorAll('.filter-tab').forEach(t=>t.classList.remove('active'));
+    btn.classList.add('active');currentFilter=type;
+    renderAds(type?allAds.filter(a=>(a.type||'').includes(type)):allAds);
+  }
+
+  async function loadAdsFromFirebase(){
+    try{
+      const ads=await window.firebaseGetAds();
+      allAds=ads;
+      ads.forEach(ad=>{const c=ad.cat||'أخرى';if(!catAds[c])catAds[c]=[];catAds[c].push(ad);});
+      renderAds(ads);
+    }catch(err){
+      console.warn("Firebase:",err.message);
+      const demo=[
+        {emoji:'📱',title:'آيفون 14 برو ماكس',price:'120,000 دج',city:'الجزائر',cat:'إلكترونيات',type:'للبيع',userName:'أمين',userPhoto:''},
+        {emoji:'🚗',title:'رونو كليو 2020',price:'2,800,000 دج',city:'وهران',cat:'سيارات',type:'للبيع',userName:'كريم',userPhoto:''},
+        {emoji:'🛋️',title:'طقم صالون فاخر',price:'85,000 دج',city:'قسنطينة',cat:'أثاث',type:'للبيع',userName:'سارة',userPhoto:''},
+        {emoji:'🏠',title:'شقة للإيجار - 3 غرف',price:'35,000 دج/شهر',city:'الجزائر',cat:'عقارات',type:'للإيجار',userName:'محمد',userPhoto:''},
+        {emoji:'🎮',title:'بلاي ستيشن 5',price:'75,000 دج',city:'عنابة',cat:'ألعاب',type:'للبيع',userName:'عمر',userPhoto:''},
+        {emoji:'👗',title:'قندورة عصرية جديدة',price:'8,500 دج',city:'تلمسان',cat:'ملابس',type:'للبيع',userName:'ليلى',userPhoto:''},
+      ];
+      allAds=demo;renderAds(demo);
+    }
+  }
+
+  function toggleCatPanel(catName,catIcon,el){
+    const panel=document.getElementById('catAdsPanel');
+    if(activeCatEl===el&&panel.style.display!=='none'){panel.style.display='none';el.classList.remove('active-cat');activeCatEl=null;return;}
+    if(activeCatEl)activeCatEl.classList.remove('active-cat');
+    activeCatEl=el;el.classList.add('active-cat');
+    const ads=catAds[catName]||[];
+    panel.style.display='block';
+    panel.innerHTML=`
       <div class="cat-ads-inner">
         <div class="cat-panel-header">
-          <div class="cat-panel-title">
-            ${catIcon} ${catName}
-            <span class="cat-panel-count">${ads.length} إعلان</span>
-          </div>
+          <div class="cat-panel-title">${catIcon} ${catName}<span class="cat-panel-count">${ads.length} إعلان</span></div>
           <div style="display:flex;gap:10px;align-items:center;">
             <button class="btn-add-in-cat" onclick="openModalWithCategory('${catName}')">+ أضف إعلان</button>
             <button class="btn-panel-close" onclick="closeCatPanel()">✕</button>
           </div>
         </div>
-        ${ads.length === 0 ? `
+        ${ads.length===0?`
           <div class="panel-empty">
             <span class="empty-icon">${catIcon}</span>
             <p>لا توجد إعلانات في هذه الفئة بعد</p>
             <button class="btn-add-in-cat" onclick="openModalWithCategory('${catName}')">+ كن أول من يضيف إعلاناً</button>
-          </div>
-        ` : `
-          <div class="panel-ads-grid">
-            ${ads.map(ad => `
-              <div class="ad-card">
-                <div class="ad-image">${ad.emoji}<span class="ad-badge">${ad.type}</span></div>
-                <div class="ad-body">
-                  <div class="ad-title">${ad.title}</div>
-                  <div class="ad-meta"><span>📍 ${ad.city}</span></div>
-                  <div class="ad-price">${ad.price}</div>
-                  <div class="ad-footer">
-                    <div class="ad-seller"><div class="seller-avatar">${ad.seller[0]}</div>${ad.seller}</div>
-                    <button class="btn-contact">تواصل</button>
-                  </div>
-                </div>
-              </div>
-            `).join('')}
-          </div>
-        `}
-      </div>
-    `;
-    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          </div>`:`
+          <div class="panel-ads-grid">${ads.map(ad=>adCardHTML(ad)).join('')}</div>`}
+      </div>`;
+    panel.scrollIntoView({behavior:'smooth',block:'nearest'});
   }
 
-  function closeCatPanel() {
-    document.getElementById('catAdsPanel').style.display = 'none';
-    if (activeCatEl) activeCatEl.classList.remove('active-cat');
-    activeCatEl = null;
+  function closeCatPanel(){
+    document.getElementById('catAdsPanel').style.display='none';
+    if(activeCatEl)activeCatEl.classList.remove('active-cat');activeCatEl=null;
   }
 
-  let currentStep = 'auth';
-  let selectedCategory = '';
-  let isLoggedIn = false;
-
-  function openModal() {
+  function openModal(){
     document.getElementById('modalOverlay').classList.add('open');
-    isLoggedIn ? showCategoryStep() : showAuthStep();
+    window.currentUser?showCategoryStep():showAuthStep();
   }
 
-  function openModalWithCategory(cat) {
-    selectedCategory = cat;
-    openModal();
-  }
+  function openModalWithCategory(cat){selectedCategory=cat;openModal();}
 
-  function closeModal() {
+  function closeModal(){
     document.getElementById('modalOverlay').classList.remove('open');
-    setTimeout(() => { currentStep = 'auth'; }, 400);
+    setTimeout(()=>{selectedCategory='';},400);
   }
 
-  function handleOverlayClick(e) {
-    if (e.target === document.getElementById('modalOverlay')) closeModal();
-  }
+  function handleOverlayClick(e){if(e.target===document.getElementById('modalOverlay'))closeModal();}
 
-  function showAuthStep() {
-    document.getElementById('modalTitle').textContent = 'أضف إعلانك';
-    document.getElementById('modalBody').innerHTML = `
+  function showAuthStep(){
+    document.getElementById('modalTitle').textContent='أضف إعلانك';
+    document.getElementById('modalBody').innerHTML=`
       <div class="auth-step">
         <div class="auth-icon">🔐</div>
         <div class="auth-title">سجّل دخولك لنشر إعلانك</div>
         <div class="auth-sub">انضم لآلاف الجزائريين البائعين والمشترين على Algerie-Market</div>
-        <button class="btn-google" onclick="loginWithGoogle()">
+        <button class="btn-google" id="btnGoogle" onclick="doGoogleLogin()">
           <div class="google-logo"></div>
           تسجيل الدخول بـ Google
         </button>
-        <div class="divider">أو</div>
-        <div class="form-group"><input class="form-control" type="email" placeholder="البريد الإلكتروني"></div>
-        <div class="form-group"><input class="form-control" type="password" placeholder="كلمة المرور"></div>
-        <button class="btn-submit" onclick="loginWithGoogle()">دخول ←</button>
-        <p style="margin-top:14px;font-size:0.8rem;color:var(--text-muted)">ليس لديك حساب؟ <a href="#" style="color:var(--primary);">إنشاء حساب</a></p>
-      </div>
-    `;
+        <div class="divider">أمان تام • مجاني • سريع</div>
+        <p style="font-size:.82rem;color:var(--text-muted);line-height:1.6;">🔒 نستخدم Google لحماية حسابك</p>
+      </div>`;
   }
 
-  function loginWithGoogle() {
-    isLoggedIn = true;
-    showCategoryStep();
+  async function doGoogleLogin(){
+    const btn=document.getElementById('btnGoogle');
+    btn.innerHTML=`<div class="spinner"></div> جاري التسجيل...`;btn.disabled=true;
+    const user=await window.firebaseLoginWithGoogle();
+    if(user){showToast(`مرحباً ${user.displayName} 👋`);showCategoryStep();}
+    else{btn.innerHTML=`<div class="google-logo"></div> تسجيل الدخول بـ Google`;btn.disabled=false;}
   }
 
-  function showCategoryStep() {
-    document.getElementById('modalTitle').textContent = 'اختر فئة الإعلان';
-    const categories = [
+  function showCategoryStep(){
+    document.getElementById('modalTitle').textContent='اختر فئة الإعلان';
+    const cats=[
       {icon:'🚗',name:'سيارات'},{icon:'📱',name:'إلكترونيات'},
       {icon:'🏠',name:'عقارات'},{icon:'👗',name:'ملابس'},
       {icon:'🛋️',name:'أثاث'},{icon:'🏍️',name:'دراجات'},
@@ -919,38 +463,30 @@
       {icon:'🐕',name:'حيوانات'},{icon:'⚽',name:'رياضة'},
       {icon:'🎮',name:'ألعاب'},{icon:'📚',name:'كتب'},
     ];
-    document.getElementById('modalBody').innerHTML = `
+    document.getElementById('modalBody').innerHTML=`
       <div class="steps-indicator">
-        <div class="step-dot done"></div>
-        <div class="step-dot active"></div>
-        <div class="step-dot"></div>
+        <div class="step-dot done"></div><div class="step-dot active"></div><div class="step-dot"></div>
       </div>
       <div class="cats-select">
-        ${categories.map(c => `
+        ${cats.map(c=>`
           <div class="cat-select-item ${c.name===selectedCategory?'selected':''}" onclick="selectCategory('${c.name}',this)">
-            <span class="icon">${c.icon}</span>
-            <span class="name">${c.name}</span>
-          </div>
-        `).join('')}
+            <span class="icon">${c.icon}</span><span class="name">${c.name}</span>
+          </div>`).join('')}
       </div>
-      <button class="btn-submit" onclick="showFormStep()">التالي ←</button>
-    `;
+      <button class="btn-submit" onclick="showFormStep()">التالي ←</button>`;
   }
 
-  function selectCategory(name, el) {
-    document.querySelectorAll('.cat-select-item').forEach(c => c.classList.remove('selected'));
-    el.classList.add('selected');
-    selectedCategory = name;
+  function selectCategory(name,el){
+    document.querySelectorAll('.cat-select-item').forEach(c=>c.classList.remove('selected'));
+    el.classList.add('selected');selectedCategory=name;
   }
 
-  function showFormStep() {
-    if (!selectedCategory) { alert('يرجى اختيار فئة'); return; }
-    document.getElementById('modalTitle').textContent = `أضف إعلانك في: ${selectedCategory}`;
-    document.getElementById('modalBody').innerHTML = `
+  function showFormStep(){
+    if(!selectedCategory){showToast('يرجى اختيار فئة أولاً','#FF6B35');return;}
+    document.getElementById('modalTitle').textContent=`إعلان في: ${selectedCategory}`;
+    document.getElementById('modalBody').innerHTML=`
       <div class="steps-indicator">
-        <div class="step-dot done"></div>
-        <div class="step-dot done"></div>
-        <div class="step-dot active"></div>
+        <div class="step-dot done"></div><div class="step-dot done"></div><div class="step-dot active"></div>
       </div>
       <div class="form-group">
         <label class="form-label">عنوان الإعلان <span>*</span></label>
@@ -967,11 +503,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">العملة</label>
-          <select class="form-control" id="adCurrency">
-            <option>دينار جزائري (دج)</option>
-            <option>يورو (€)</option>
-            <option>دولار أمريكي ($)</option>
-          </select>
+          <select class="form-control" id="adCurrency"><option>دج</option><option>€</option><option>$</option></select>
         </div>
       </div>
       <div class="form-row">
@@ -985,64 +517,70 @@
             <option>البليدة</option><option>باتنة</option><option>مستغانم</option>
             <option>سيدي بلعباس</option><option>الشلف</option><option>جيجل</option>
             <option>ورقلة</option><option>أدرار</option><option>تمنراست</option>
-            <option>غرداية</option><option>تيارت</option><option>المدية</option>
-            <option>أخرى</option>
+            <option>غرداية</option><option>تيارت</option><option>المدية</option><option>أخرى</option>
           </select>
         </div>
         <div class="form-group">
           <label class="form-label">نوع الإعلان</label>
           <select class="form-control" id="adType">
-            <option>للبيع</option><option>للإيجار</option>
-            <option>مطلوب</option><option>مجاني</option>
+            <option>للبيع</option><option>للإيجار</option><option>مطلوب</option><option>مجاني</option>
           </select>
         </div>
       </div>
       <div class="form-group">
         <label class="form-label">رقم التواصل</label>
-        <input class="form-control" type="tel" placeholder="+213 5XX XX XX XX">
+        <input class="form-control" id="adPhone" type="tel" placeholder="+213 5XX XX XX XX">
       </div>
-      <div class="form-group">
-        <label class="form-label">صور المنتج</label>
-        <div class="image-upload">
-          <span class="upload-icon">📸</span>
-          اسحب الصور هنا أو اضغط للرفع
-          <br><small style="color:var(--text-muted);margin-top:6px;display:block">JPG, PNG — الحد الأقصى 5 صور</small>
-        </div>
-      </div>
-      <button class="btn-submit" onclick="submitAd()">🚀 نشر الإعلان الآن</button>
-      <button class="btn-back" onclick="showCategoryStep()">← رجوع</button>
-    `;
+      <button class="btn-submit" id="btnPublish" onclick="submitAd()">🚀 نشر الإعلان الآن</button>
+      <button class="btn-back" onclick="showCategoryStep()">← رجوع</button>`;
   }
 
-  function submitAd() {
-    const title = document.getElementById('adTitle')?.value || 'إعلان جديد';
-    const price = document.getElementById('adPrice')?.value || '0';
-    const city = document.getElementById('adCity')?.value || 'الجزائر';
-    const type = document.getElementById('adType')?.value || 'للبيع';
-    const currency = document.getElementById('adCurrency')?.value || 'دج';
-
-    const newAd = {
-      emoji: '🆕', title, seller: 'أنت',
-      price: `${Number(price).toLocaleString()} ${currency.includes('دينار') ? 'دج' : currency.includes('يورو') ? '€' : '$'}`,
-      city, cat: selectedCategory, type
-    };
-
-    mockAds.unshift(newAd);
-    if (!catAds[selectedCategory]) catAds[selectedCategory] = [];
-    catAds[selectedCategory].unshift(newAd);
-
-    document.getElementById('modalTitle').textContent = 'تم النشر بنجاح 🎉';
-    document.getElementById('modalBody').innerHTML = `
-      <div class="success-state">
-        <div class="success-icon">✅</div>
-        <h3 style="font-family:'Cairo',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:10px;">إعلانك تم نشره!</h3>
-        <p style="color:var(--text-muted);font-size:0.9rem;margin-bottom:28px;">سيظهر إعلانك لآلاف الجزائريين الآن 🇩🇿</p>
-        <button class="btn-submit" onclick="closeModal(); renderAds();">رائع، شكراً! 🎊</button>
-        <button class="btn-back" onclick="selectedCategory=''; showCategoryStep();">إضافة إعلان آخر</button>
-      </div>
-    `;
-    renderAds();
+  async function submitAd(){
+    const title=document.getElementById('adTitle')?.value.trim();
+    const desc=document.getElementById('adDesc')?.value.trim();
+    const price=document.getElementById('adPrice')?.value;
+    const city=document.getElementById('adCity')?.value;
+    const type=document.getElementById('adType')?.value;
+    const currency=document.getElementById('adCurrency')?.value;
+    const phone=document.getElementById('adPhone')?.value.trim();
+    if(!title){showToast('يرجى كتابة عنوان الإعلان','#FF6B35');return;}
+    if(!price){showToast('يرجى إدخال السعر','#FF6B35');return;}
+    if(!city){showToast('يرجى اختيار الولاية','#FF6B35');return;}
+    const btn=document.getElementById('btnPublish');
+    btn.innerHTML=`<div class="spinner"></div> جاري النشر...`;btn.disabled=true;
+    const catEmojis={'سيارات':'🚗','إلكترونيات':'📱','عقارات':'🏠','ملابس':'👗','أثاث':'🛋️','دراجات':'🏍️','وظائف':'💼','خدمات':'🔧','حيوانات':'🐕','رياضة':'⚽','ألعاب':'🎮','كتب':'📚'};
+    const adData={title,desc,price:`${Number(price).toLocaleString()} ${currency}`,city,type,phone,cat:selectedCategory,category:selectedCategory,emoji:catEmojis[selectedCategory]||'📦'};
+    try{
+      const id=await window.firebaseSaveAd(adData);
+      const newAd={id,...adData,userName:window.currentUser?.displayName||'مستخدم',userPhoto:window.currentUser?.photoURL||''};
+      allAds.unshift(newAd);
+      if(!catAds[selectedCategory])catAds[selectedCategory]=[];
+      catAds[selectedCategory].unshift(newAd);
+      renderAds(allAds);
+      document.getElementById('modalTitle').textContent='تم النشر بنجاح 🎉';
+      document.getElementById('modalBody').innerHTML=`
+        <div class="success-state">
+          <div class="success-icon">✅</div>
+          <h3 style="font-family:'Cairo',sans-serif;font-size:1.3rem;font-weight:800;margin-bottom:10px;">إعلانك تم نشره!</h3>
+          <p style="color:var(--text-muted);font-size:.9rem;margin-bottom:28px;">سيظهر إعلانك لآلاف الجزائريين الآن 🇩🇿</p>
+          <button class="btn-submit" onclick="closeModal()">رائع، شكراً! 🎊</button>
+          <button class="btn-back" onclick="selectedCategory='';showCategoryStep()">إضافة إعلان آخر</button>
+        </div>`;
+      showToast('✅ تم نشر إعلانك بنجاح!');
+    }catch(err){
+      console.error(err);
+      showToast('حدث خطأ، تأكد من إعدادات Firebase','#FF6B35');
+      btn.innerHTML='🚀 نشر الإعلان الآن';btn.disabled=false;
+    }
   }
+
+  async function logoutUser(){
+    await window.firebaseLogout();
+    showToast('تم تسجيل الخروج 👋','#8899BB');
+  }
+
+  window.currentUser=null;
+  setTimeout(loadAdsFromFirebase,1000);
 </script>
 </body>
-      </html>
+                                                            </html>
