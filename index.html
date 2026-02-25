@@ -137,7 +137,8 @@
     .detail-row .label { color:var(--text-muted); }
     .detail-row .value { font-weight:700; }
     .stars-row { display:flex; gap:4px; align-items:center; }
-    .star { font-size:24px; cursor:pointer; transition:transform 0.1s; color:#444; }
+    .star { font-size:20px; cursor:pointer; transition:transform 0.1s; color:#444; }
+    .star.active { color:var(--gold); }
     .star:hover { transform:scale(1.2); }
     .rating-display { display:flex; gap:3px; align-items:center; }
     .rating-display .star-sm { font-size:13px; color:var(--gold); }
@@ -148,7 +149,7 @@
     .comment-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; }
     .comment-author { font-size:12px; font-weight:700; color:var(--orange); }
     .comment-time { font-size:10px; color:var(--text-muted); }
-    .comment-stars { display:flex; gap:2px; margin-bottom:5px; color:var(--gold); font-size:13px; }
+    .comment-stars { color:var(--gold); font-size:13px; margin-bottom:4px; }
     .comment-text { font-size:12px; color:var(--text); line-height:1.6; }
     .add-comment-box { margin-top:12px; }
     .comment-input-row { display:flex; gap:8px; margin-top:8px; }
@@ -156,6 +157,7 @@
     .comment-input-row input:focus { border-color:var(--orange); }
     .comment-input-row button { padding:9px 16px; background:var(--orange); border:none; border-radius:10px; color:white; font-family:'Cairo',sans-serif; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap; }
     .no-comments { text-align:center; color:var(--text-muted); font-size:12px; padding:16px; }
+    .comments-loading { text-align:center; color:var(--text-muted); font-size:12px; padding:12px; }
     .user-badge { display:flex; align-items:center; gap:8px; }
     .user-avatar { width:32px; height:32px; background:linear-gradient(135deg,var(--orange),var(--gold)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:white; flex-shrink:0; }
     .user-name { font-size:12px; font-weight:700; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -243,7 +245,7 @@
 <div id="categoryPage" class="page">
   <div class="breadcrumb">
     <span onclick="goHome()">🏠 الرئيسية</span>
-    <span style="color:var(--border)">›</span>
+    <span class="sep" style="color:var(--border)">›</span>
     <span class="current" id="breadcrumbCat">الفئة</span>
   </div>
   <div class="cat-page-header">
@@ -412,20 +414,17 @@
 
   let currentUser = null;
   let allAds = [];
-  let currentCat = '';
+  let currentCat = 'all';
   let currentType = 'all';
   let selectedImgs = [];
   let displayCount = 12;
   let currentRating = 0;
   const PAGE_SIZE = 12;
 
-  // ======= NAVIGATION =======
   window.goHome = () => { showPage('homePage'); currentType = 'all'; };
 
   window.openCategory = (cat, icon) => {
-    currentCat = cat;
-    currentType = 'all';
-    displayCount = PAGE_SIZE;
+    currentCat = cat; currentType = 'all'; displayCount = PAGE_SIZE;
     document.getElementById('catPageTitle').textContent = icon + ' ' + cat;
     document.getElementById('breadcrumbCat').textContent = cat;
     document.querySelectorAll('.filter-btn').forEach((b,i) => b.classList.toggle('active', i===0));
@@ -433,13 +432,12 @@
     renderCategoryAds();
   };
 
-  const showPage = (id) => {
+  const showPage = id => {
     document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
     document.getElementById(id).classList.add('active');
-    window.scrollTo(0, 0);
+    window.scrollTo(0,0);
   };
 
-  // ======= UTILS =======
   window.openModal = id => document.getElementById(id).classList.add('open');
   window.closeModal = id => document.getElementById(id).classList.remove('open');
 
@@ -456,13 +454,12 @@
 
   window.logout = async () => { await signOut(auth); showToast('تم تسجيل الخروج'); };
 
-  window.switchAuthTab = (tab) => {
+  window.switchAuthTab = tab => {
     document.querySelectorAll('.auth-tab').forEach((t,i) => t.classList.toggle('active',(tab==='login'&&i===0)||(tab==='register'&&i===1)));
     document.getElementById('loginForm').style.display = tab==='login'?'block':'none';
     document.getElementById('registerForm').style.display = tab==='register'?'block':'none';
   };
 
-  // ======= AUTH =======
   window.doLogin = async () => {
     const email = document.getElementById('loginEmail').value.trim();
     const pass = document.getElementById('loginPass').value;
@@ -496,8 +493,7 @@
       await addDoc(collection(db,'users'),{uid:cred.user.uid,name,email,phone,createdAt:new Date()});
       closeModal('authModal'); showToast('تم إنشاء حسابك بنجاح! 🎉');
     } catch(e) {
-      if(e.code==='auth/email-already-in-use') showToast('هذا البريد مستخدم مسبقاً','error');
-      else showToast('حدث خطأ، حاول مرة أخرى','error');
+      showToast(e.code==='auth/email-already-in-use'?'هذا البريد مستخدم مسبقاً':'حدث خطأ، حاول مرة أخرى','error');
     }
     btn.disabled=false; btn.textContent='إنشاء حساب';
   };
@@ -516,25 +512,21 @@
     }
   });
 
-  // ======= IMAGES =======
-  window.previewImgs = (e) => {
+  window.previewImgs = e => {
     selectedImgs=Array.from(e.target.files).slice(0,5);
-    const container=document.getElementById('imgPreviews');
-    container.innerHTML='';
+    const container=document.getElementById('imgPreviews'); container.innerHTML='';
     selectedImgs.forEach((f,i)=>{
       const reader=new FileReader();
       reader.onload=ev=>{
-        const div=document.createElement('div');
-        div.className='img-preview-item';
+        const div=document.createElement('div'); div.className='img-preview-item';
         div.innerHTML=`<img src="${ev.target.result}"><button onclick="removeImg(${i})">✕</button>`;
         container.appendChild(div);
       };
       reader.readAsDataURL(f);
     });
   };
-  window.removeImg = (i) => { selectedImgs.splice(i,1); };
+  window.removeImg = i => { selectedImgs.splice(i,1); };
 
-  // ======= POST AD =======
   window.submitAd = async () => {
     if (!currentUser) return showToast('سجل دخول أولاً','error');
     const title=document.getElementById('adTitle').value.trim();
@@ -573,13 +565,12 @@
     btn.disabled=false; btn.textContent='🚀 نشر الإعلان';
   };
 
-  // ======= LOAD ADS =======
   const loadAds = async () => {
     try {
       const snap=await getDocs(query(collection(db,'ads'),orderBy('createdAt','desc'),limit(300)));
       allAds=snap.docs.map(d=>({id:d.id,...d.data()}));
       updateCounts(); updateStats();
-      if (document.getElementById('categoryPage').classList.contains('active')) renderCategoryAds();
+      if(document.getElementById('categoryPage').classList.contains('active')) renderCategoryAds();
     } catch(e){ console.error(e); }
   };
 
@@ -598,11 +589,10 @@
     } catch(e){ document.getElementById('statUsers').textContent='1+'; }
   };
 
-  // ======= RENDER =======
   const catIcons={سيارات:'🚗',عقارات:'🏠',إلكترونيات:'📱',ملابس:'👗',وظائف:'💼',أثاث:'🛋️',دراجات:'🏍️',خدمات:'🔧',حيوانات:'🐾',رياضة:'⚽','إلكترونيات منزلية':'🏡',أخرى:'📦'};
   const typeClass={'للبيع':'type-sell','للإيجار':'type-rent','مطلوب':'type-wanted','مجاني':'type-free'};
 
-  const timeAgo=(d)=>{
+  const timeAgo = d => {
     if(!d) return '';
     const sec=Math.floor((new Date()-(d.toDate?d.toDate():new Date(d)))/1000);
     if(sec<60) return 'الآن';
@@ -611,18 +601,17 @@
     return Math.floor(sec/86400)+' يوم';
   };
 
-  const starsHtml=(avg,count)=>{
-    const full=Math.round(avg||0);
-    let s='';
+  const starsHtml = (avg,count) => {
+    const full=Math.round(avg||0); let s='';
     for(let i=1;i<=5;i++) s+=`<span class="star-sm ${i<=full?'':'empty'}">★</span>`;
     return `<div class="rating-display">${s}<span style="font-size:10px;color:var(--text-muted);margin-right:4px">(${count||0})</span></div>`;
   };
 
-  const adCardHtml=(ad,i)=>`
+  const adCardHtml = (ad,i) => `
     <div class="ad-card" style="animation-delay:${i*0.05}s" onclick="openDetail('${ad.id}')">
       <div class="ad-img">
         ${ad.images&&ad.images[0]?`<img src="${ad.images[0]}" loading="lazy" alt="${ad.title}">`:(catIcons[ad.cat]||'📦')}
-        ${ad.avgRating>0?`<div class="ad-rating-badge">⭐ ${(ad.avgRating||0).toFixed(1)}</div>`:''}
+        ${ad.avgRating>0?`<div class="ad-rating-badge">⭐ ${Number(ad.avgRating).toFixed(1)}</div>`:''}
       </div>
       <div class="ad-body">
         <span class="ad-type ${typeClass[ad.type]||'type-sell'}">${ad.type}</span>
@@ -633,44 +622,38 @@
       </div>
     </div>`;
 
-  const renderCategoryAds=()=>{
+  const renderCategoryAds = () => {
     let ads=allAds.filter(a=>a.cat===currentCat);
     if(currentType!=='all') ads=ads.filter(a=>a.type===currentType);
     const grid=document.getElementById('adsGrid');
     if(!ads.length){
       grid.innerHTML=`<div class="empty-state"><div class="icon">📭</div><h3>لا توجد إعلانات في ${currentCat}</h3><p>كن أول من ينشر في هذه الفئة!</p><button class="btn btn-primary" onclick="requireAuth()" style="margin-top:12px">+ أضف إعلان</button></div>`;
-      document.getElementById('loadMoreBtn').style.display='none';
-      return;
+      document.getElementById('loadMoreBtn').style.display='none'; return;
     }
     grid.innerHTML=ads.slice(0,displayCount).map((ad,i)=>adCardHtml(ad,i)).join('');
     document.getElementById('loadMoreBtn').style.display=ads.length>displayCount?'inline-block':'none';
   };
 
-  window.loadMore=()=>{ displayCount+=PAGE_SIZE; renderCategoryAds(); };
+  window.loadMore = () => { displayCount+=PAGE_SIZE; renderCategoryAds(); };
 
-  window.filterType=(type,el)=>{
+  window.filterType = (type,el) => {
     currentType=type; displayCount=PAGE_SIZE;
     document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
-    el.classList.add('active');
-    renderCategoryAds();
+    el.classList.add('active'); renderCategoryAds();
   };
 
-  // ======= SEARCH =======
-  window.doSearch=()=>{
+  window.doSearch = () => {
     const q=document.getElementById('searchInput').value.trim();
     if(!q) return;
     const results=allAds.filter(a=>a.title.includes(q)||a.desc.includes(q)||a.wilaya.includes(q)||a.cat.includes(q));
     showPage('searchPage');
     const grid=document.getElementById('searchGrid');
-    if(!results.length){
-      grid.innerHTML=`<div class="empty-state"><div class="icon">🔍</div><h3>لا نتائج لـ "${q}"</h3><p>جرب كلمة بحث أخرى</p></div>`;
-      return;
-    }
-    grid.innerHTML=results.map((ad,i)=>adCardHtml(ad,i)).join('');
+    grid.innerHTML=results.length
+      ? results.map((ad,i)=>adCardHtml(ad,i)).join('')
+      : `<div class="empty-state"><div class="icon">🔍</div><h3>لا نتائج لـ "${q}"</h3><p>جرب كلمة بحث أخرى</p></div>`;
   };
 
-  // ======= AD DETAIL =======
-  window.openDetail=async(id)=>{
+  window.openDetail = async id => {
     const ad=allAds.find(a=>a.id===id);
     if(!ad) return;
     currentRating=0;
@@ -688,7 +671,7 @@
         <div class="detail-row"><span class="label">المشاهدات</span><span class="value">👁️ ${(ad.views||0)+1}</span></div>
         <div class="detail-row"><span class="label">التقييم</span><span class="value">${starsHtml(ad.avgRating,ad.ratingCount)}</span></div>
       </div>
-      <div style="font-size:13px;color:var(--text-muted);line-height:1.8;margin-bottom:12px">${ad.desc}</div>
+      <div style="font-size:13px;color:var(--text-muted);line-height:1.8;margin-bottom:14px">${ad.desc}</div>
       <button class="contact-btn" onclick="window.open('https://wa.me/213${ad.phone.replace(/^0/,'')}?text=السلام عليكم، رأيت إعلانك على Algerie-Market: ${encodeURIComponent(ad.title)}','_blank')">
         <span>📱</span> تواصل عبر واتساب - ${ad.phone}
       </button>
@@ -710,7 +693,7 @@
       </div>
       <div class="comments-section">
         <h4>💬 التعليقات</h4>
-        <div id="commentsList"><div style="text-align:center;color:var(--text-muted);font-size:12px;padding:12px">جاري تحميل التعليقات...</div></div>
+        <div id="commentsList"><div class="comments-loading">جاري تحميل التعليقات...</div></div>
         ${currentUser?`
           <div class="add-comment-box">
             <div style="font-size:12px;font-weight:700;color:var(--text-muted);margin-bottom:6px">أضف تعليقاً</div>
@@ -719,63 +702,70 @@
               <button onclick="submitComment('${id}')">إرسال</button>
             </div>
           </div>
-        `:`<div style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center">سجل دخول للتعليق</div>`}
+        `:`<div style="font-size:12px;color:var(--text-muted);margin-top:8px;text-align:center">سجل دخول للتعليق على الإعلان</div>`}
       </div>`;
     openModal('detailModal');
     try { await updateDoc(doc(db,'ads',id),{views:increment(1)}); } catch(e){}
     loadComments(id);
   };
 
-  // ======= RATING =======
-  window.hoverRating=(n)=>{
-    document.querySelectorAll('#starRow .star').forEach((s,i)=>{ s.style.color=i<n?'var(--gold)':'#444'; });
+  window.hoverRating = n => {
+    document.querySelectorAll('#starRow .star').forEach((s,i) => { s.style.color=i<n?'var(--gold)':'#444'; });
   };
-  window.resetHover=()=>{
-    document.querySelectorAll('#starRow .star').forEach((s,i)=>{ s.style.color=i<currentRating?'var(--gold)':'#444'; });
+  window.resetHover = () => {
+    document.querySelectorAll('#starRow .star').forEach((s,i) => { s.style.color=i<currentRating?'var(--gold)':'#444'; });
   };
-  window.setRating=async(n,adId)=>{
+
+  window.setRating = async (n,adId) => {
     if(!currentUser) return showToast('سجل دخول أولاً','error');
     currentRating=n;
     resetHover();
-    const status=document.getElementById('ratingStatus');
-    status.textContent='⏳ جاري حفظ تقييمك...';
+    document.getElementById('ratingStatus').textContent='⏳ جاري حفظ تقييمك...';
     try {
-      const rq=await getDocs(query(collection(db,'ratings'),where('adId','==',adId),where('userId','==',currentUser.uid)));
-      if(!rq.empty) await updateDoc(doc(db,'ratings',rq.docs[0].id),{rating:n,updatedAt:new Date()});
-      else await addDoc(collection(db,'ratings'),{adId,userId:currentUser.uid,rating:n,createdAt:new Date()});
-      const allR=await getDocs(query(collection(db,'ratings'),where('adId','==',adId)));
-      const ratings=allR.docs.map(d=>d.data().rating);
-      const avg=ratings.reduce((a,b)=>a+b,0)/ratings.length;
-      await updateDoc(doc(db,'ads',adId),{avgRating:avg,ratingCount:ratings.length});
-      const local=allAds.find(a=>a.id===adId);
-      if(local){local.avgRating=avg;local.ratingCount=ratings.length;}
-      status.textContent=`✅ تم تقييمك بـ ${n} نجمة`;
-      showToast('شكراً على تقييمك! ⭐');
-    } catch(e){ status.textContent='حدث خطأ'; }
+      const allRatingsSnap=await getDocs(query(collection(db,'ratings'),where('adId','==',adId)));
+      const allRatingDocs=allRatingsSnap.docs;
+      const existingDoc=allRatingDocs.find(d=>d.data().userId===currentUser.uid);
+      if(existingDoc) {
+        await updateDoc(doc(db,'ratings',existingDoc.id),{rating:n,updatedAt:new Date()});
+      } else {
+        await addDoc(collection(db,'ratings'),{adId,userId:currentUser.uid,rating:n,createdAt:new Date()});
+      }
+      const updatedRatings=allRatingDocs.filter(d=>d.data().userId!==currentUser.uid).map(d=>d.data().rating);
+      updatedRatings.push(n);
+      const avg=updatedRatings.reduce((a,b)=>a+b,0)/updatedRatings.length;
+      await updateDoc(doc(db,'ads',adId),{avgRating:avg,ratingCount:updatedRatings.length});
+      const localAd=allAds.find(a=>a.id===adId);
+      if(localAd){localAd.avgRating=avg;localAd.ratingCount=updatedRatings.length;}
+      document.getElementById('ratingStatus').textContent=`✅ تم تقييمك بـ ${n} نجمة`;
+      showToast(`شكراً! قيّمت بـ ${n} نجوم ⭐`);
+    } catch(e){ document.getElementById('ratingStatus').textContent='حدث خطأ، حاول مرة أخرى'; console.error(e); }
   };
 
-  // ======= COMMENTS =======
-  const loadComments=async(adId)=>{
+  const loadComments = async adId => {
     const list=document.getElementById('commentsList');
     if(!list) return;
     try {
-      const snap=await getDocs(query(collection(db,'comments'),where('adId','==',adId),orderBy('createdAt','desc'),limit(20)));
+      const snap=await getDocs(query(collection(db,'comments'),where('adId','==',adId),limit(50)));
       if(snap.empty){ list.innerHTML='<div class="no-comments">لا توجد تعليقات بعد، كن أول من يعلق!</div>'; return; }
-      list.innerHTML=snap.docs.map(d=>{
-        const c=d.data();
-        return `<div class="comment-item">
+      const comments=snap.docs.map(d=>({id:d.id,...d.data()}));
+      comments.sort((a,b)=>{
+        const ta=a.createdAt?.toDate?a.createdAt.toDate():new Date(a.createdAt||0);
+        const tb=b.createdAt?.toDate?b.createdAt.toDate():new Date(b.createdAt||0);
+        return tb-ta;
+      });
+      list.innerHTML=comments.map(c=>`
+        <div class="comment-item">
           <div class="comment-header">
             <span class="comment-author">👤 ${c.userName}</span>
             <span class="comment-time">${timeAgo(c.createdAt)}</span>
           </div>
           ${c.rating?`<div class="comment-stars">${'★'.repeat(c.rating)}<span style="color:#444">${'★'.repeat(5-c.rating)}</span></div>`:''}
           <div class="comment-text">${c.text}</div>
-        </div>`;
-      }).join('');
-    } catch(e){ list.innerHTML='<div class="no-comments">تعذر تحميل التعليقات</div>'; }
+        </div>`).join('');
+    } catch(e){ list.innerHTML='<div class="no-comments">تعذر تحميل التعليقات</div>'; console.error(e); }
   };
 
-  window.submitComment=async(adId)=>{
+  window.submitComment = async adId => {
     if(!currentUser) return showToast('سجل دخول أولاً','error');
     const input=document.getElementById('commentInput');
     const text=input.value.trim();
@@ -794,8 +784,7 @@
     input.disabled=false;
   };
 
-  // ======= MY ADS =======
-  window.openMyAds=async()=>{
+  window.openMyAds = async () => {
     if(!currentUser) return;
     openModal('myAdsModal');
     const list=document.getElementById('myAdsList');
@@ -808,24 +797,23 @@
         <div class="my-ad-info">
           <div class="my-ad-title">${ad.title}</div>
           <div class="my-ad-price">${ad.price==='قابل للتفاوض'?'قابل للتفاوض':Number(ad.price).toLocaleString()+' دج'}</div>
-          <div style="font-size:10px;color:var(--text-muted)">📍 ${ad.wilaya} • 👁️ ${ad.views||0} • ⭐ ${(ad.avgRating||0).toFixed(1)}</div>
+          <div style="font-size:10px;color:var(--text-muted)">📍 ${ad.wilaya} • 👁️ ${ad.views||0} • ⭐ ${(ad.avgRating||0).toFixed(1)} (${ad.ratingCount||0})</div>
         </div>
-        <button class="btn-delete" onclick="deleteMyAd('${ad.id}',this)">حذف</button>
+        <div><button class="btn-delete" onclick="deleteMyAd('${ad.id}',this)">حذف</button></div>
       </div>`).join('');
   };
 
-  window.deleteMyAd=async(id,btn)=>{
+  window.deleteMyAd = async (id,btn) => {
     if(!confirm('هل أنت متأكد من حذف هذا الإعلان؟')) return;
     btn.textContent='...';
     try {
       await deleteDoc(doc(db,'ads',id));
       allAds=allAds.filter(a=>a.id!==id);
-      updateCounts(); openMyAds();
-      showToast('تم حذف الإعلان');
+      updateCounts(); openMyAds(); showToast('تم حذف الإعلان');
     } catch(e){ showToast('حدث خطأ','error'); }
   };
 
   loadAds();
 </script>
 </body>
-  </html>
+</html>
