@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@700;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1200px;
+    height: 630px;
+    overflow: hidden;
+    background: #0f0f23;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .wrap {
+    width: 1200px;
+    height: 630px;
+    position: relative;
+    background: #0f0f23;
+    overflow: hidden;
+  }
+
+  /* Background green shape */
+  .bg-green {
+    position: absolute;
+    top: 0; right: 0;
+    width: 420px;
+    height: 630px;
+    background: linear-gradient(135deg, #006233, #009A44);
+    clip-path: polygon(15% 0, 100% 0, 100% 100%, 0% 100%);
+  }
+
+  /* Stars/dots deco */
+  .star1 { position:absolute; top:40px; left:80px; color:#D21034; font-size:18px; opacity:0.4; }
+  .star2 { position:absolute; bottom:80px; left:300px; color:#006233; font-size:14px; opacity:0.5; }
+  .crescent { position:absolute; top:-30px; right:20px; font-size:220px; color:white; opacity:0.06; }
+
+  /* Card */
+  .card {
+    position: absolute;
+    top: 40px; left: 40px; right: 40px; bottom: 40px;
+    background: #16213e;
+    border-radius: 24px;
+    border-top: 8px solid #006233;
+    border-bottom: 8px solid #D21034;
+    display: flex;
+    align-items: center;
+    padding: 50px 60px;
+    gap: 40px;
+  }
+
+  /* Text side (right in RTL) */
+  .text-side {
+    flex: 1;
+    text-align: right;
+  }
+
+  .badge {
+    display: inline-block;
+    background: #D21034;
+    color: white;
+    font-family: 'Cairo', Arial, sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    padding: 7px 22px;
+    border-radius: 50px;
+    margin-bottom: 20px;
+  }
+
+  .title {
+    font-family: 'Cairo', Arial, sans-serif;
+    font-size: 58px;
+    font-weight: 900;
+    color: white;
+    line-height: 1.25;
+    margin-bottom: 10px;
+  }
+
+  .title .red { color: #D21034; }
+  .title .green { color: #00cc66; }
+
+  .subtitle {
+    font-family: 'Cairo', Arial, sans-serif;
+    font-size: 22px;
+    color: #888;
+    margin-bottom: 28px;
+  }
+
+  .url-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border: 2px solid #006233;
+    background: #0a1a10;
+    color: #00cc66;
+    font-size: 18px;
+    font-family: monospace;
+    font-weight: 700;
+    padding: 10px 22px;
+    border-radius: 10px;
+    direction: ltr;
+  }
+
+  /* Icon side (left in RTL) */
+  .icon-side {
+    flex-shrink: 0;
+    width: 200px;
+    height: 200px;
+    background: linear-gradient(135deg, #006233, #009A44);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 90px;
+    box-shadow: 0 15px 50px rgba(0,98,51,0.5);
+    position: relative;
+  }
+
+  .check-badge {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    width: 50px;
+    height: 50px;
+    background: #D21034;
+    border-radius: 50%;
+    border: 3px solid #16213e;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    color: white;
+  }
+
+  /* Divider */
+  .divider {
+    width: 5px;
+    height: 180px;
+    background: linear-gradient(to bottom, transparent, #006233, transparent);
+    border-radius: 3px;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="bg-green"></div>
+  <span class="star1">●</span>
+  <span class="star2">●</span>
+  <span class="crescent">☪</span>
+
+  <div class="card">
+    <div class="icon-side">
+      🛒
+      <div class="check-badge">✓</div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div class="text-side">
+      <div class="badge">🇩🇿 مجاني 100%</div>
+      <div class="title">
+        بيع وشراء <span class="red">مجاني</span><br>
+        في <span class="green">الجزائر</span>
+      </div>
+      <div class="subtitle">أنشر إعلانك في كل ولايات الجزائر</div>
+      <div class="url-box">🔗 algerie-market.github.io/market-algerie/</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
